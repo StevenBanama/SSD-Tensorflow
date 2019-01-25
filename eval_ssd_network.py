@@ -47,11 +47,11 @@ tf.app.flags.DEFINE_float(
 tf.app.flags.DEFINE_integer(
     'select_top_k', 400, 'Select top-k detected bounding boxes.')
 tf.app.flags.DEFINE_integer(
-    'keep_top_k', 200, 'Keep top-k detected objects.')
+    'keep_top_k', 400, 'Keep top-k detected objects.')
 tf.app.flags.DEFINE_float(
-    'nms_threshold', 0.45, 'Non-Maximum Selection threshold.')
+    'nms_threshold', 0.1, 'Non-Maximum Selection threshold.')
 tf.app.flags.DEFINE_float(
-    'matching_threshold', 0.5, 'Matching threshold with groundtruth objects.')
+    'matching_threshold', 0.1, 'Matching threshold with groundtruth objects.')
 tf.app.flags.DEFINE_integer(
     'eval_resize', 4, 'Image resizing: None / CENTRAL_CROP / PAD_AND_RESIZE / WARP_RESIZE.')
 tf.app.flags.DEFINE_integer(
@@ -96,7 +96,7 @@ tf.app.flags.DEFINE_float(
     'The decay to use for the moving average.'
     'If left as None, then moving averages are not used.')
 tf.app.flags.DEFINE_float(
-    'gpu_memory_fraction', 0.1, 'GPU memory fraction to use.')
+    'gpu_memory_fraction', 0.3, 'GPU memory fraction to use.')
 tf.app.flags.DEFINE_boolean(
     'wait_for_checkpoints', False, 'Wait for new checkpoints in the eval loop.')
 
@@ -301,35 +301,11 @@ def main(_):
         else:
             num_batches = math.ceil(dataset.num_samples / float(FLAGS.batch_size))
 
-        if not FLAGS.wait_for_checkpoints:
-            if tf.gfile.IsDirectory(FLAGS.checkpoint_path):
-                checkpoint_path = tf.train.latest_checkpoint(FLAGS.checkpoint_path)
-            else:
-                checkpoint_path = FLAGS.checkpoint_path
-            tf.logging.info('Evaluating %s' % checkpoint_path)
+        checkpoint_path = FLAGS.checkpoint_path
+        tf.logging.info('Evaluating %s' % checkpoint_path)
 
-            # Standard evaluation loop.
-            start = time.time()
-            slim.evaluation.evaluate_once(
-                master=FLAGS.master,
-                checkpoint_path=checkpoint_path,
-                logdir=FLAGS.eval_dir,
-                num_evals=num_batches,
-                eval_op=list(names_to_updates.values()),
-                variables_to_restore=variables_to_restore,
-                session_config=config)
-            # Log time spent.
-            elapsed = time.time()
-            elapsed = elapsed - start
-            print('Time spent : %.3f seconds.' % elapsed)
-            print('Time spent per BATCH: %.3f seconds.' % (elapsed / num_batches))
-
-        else:
-            checkpoint_path = FLAGS.checkpoint_path
-            tf.logging.info('Evaluating %s' % checkpoint_path)
-
-            # Waiting loop.
-            slim.evaluation.evaluation_loop(
+        # Waiting loop.
+        slim.evaluation.evaluation_loop(
                 master=FLAGS.master,
                 checkpoint_dir=checkpoint_path,
                 logdir=FLAGS.eval_dir,

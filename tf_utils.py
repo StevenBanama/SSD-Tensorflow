@@ -62,22 +62,22 @@ def print_configuration(flags, ssd_params, data_sources, save_dir=None):
     """Print the training configuration.
     """
     def print_config(stream=None):
-        print('\n# =========================================================================== #', file=stream)
-        print('# Training | Evaluation flags:', file=stream)
-        print('# =========================================================================== #', file=stream)
+        print('\n# =========================================================================== #')
+        print('# Training | Evaluation flags:')
+        print('# =========================================================================== #')
         pprint(flags, stream=stream)
 
-        print('\n# =========================================================================== #', file=stream)
-        print('# SSD net parameters:', file=stream)
-        print('# =========================================================================== #', file=stream)
+        print('\n# =========================================================================== #')
+        print('# SSD net parameters:')
+        print('# =========================================================================== #')
         pprint(dict(ssd_params._asdict()), stream=stream)
 
-        print('\n# =========================================================================== #', file=stream)
-        print('# Training | Evaluation dataset files:', file=stream)
-        print('# =========================================================================== #', file=stream)
+        print('\n# =========================================================================== #')
+        print('# Training | Evaluation dataset files:')
+        print('# =========================================================================== #')
         data_files = parallel_reader.get_data_files(data_sources)
         pprint(sorted(data_files), stream=stream)
-        print('', file=stream)
+        print('')
 
     print_config(None)
     # Save to a text file as well.
@@ -99,7 +99,9 @@ def configure_learning_rate(flags, num_samples_per_epoch, global_step):
       A `Tensor` representing the learning rate.
     """
     decay_steps = int(num_samples_per_epoch / flags.batch_size *
-                      flags.num_epochs_per_decay)
+                      flags.num_epochs_per_decay) if not flags.decay_steps else flags.decay_steps
+
+    print("fadsfasd!!!!!!steps", flags.decay_steps)
 
     if flags.learning_rate_decay_type == 'exponential':
         return tf.train.exponential_decay(flags.learning_rate,
@@ -145,7 +147,8 @@ def configure_optimizer(flags, learning_rate):
             learning_rate,
             beta1=flags.adam_beta1,
             beta2=flags.adam_beta2,
-            epsilon=flags.opt_epsilon)
+            epsilon=flags.opt_epsilon
+            )
     elif flags.optimizer == 'ftrl':
         optimizer = tf.train.FtrlOptimizer(
             learning_rate,
@@ -192,6 +195,7 @@ def get_init_fn(flags):
       An init function run by the supervisor.
     """
     if flags.checkpoint_path is None:
+        print("!!!!-----no checkpoint")
         return None
     # Warn the user if a checkpoint exists in the train_dir. Then ignore.
     if tf.train.latest_checkpoint(flags.train_dir):

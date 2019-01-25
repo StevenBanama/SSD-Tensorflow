@@ -24,7 +24,7 @@ import tf_utils
 
 slim = tf.contrib.slim
 
-DATA_FORMAT = 'NCHW'
+DATA_FORMAT = 'NHWC'
 
 # =========================================================================== #
 # SSD Network flags.
@@ -63,7 +63,7 @@ tf.app.flags.DEFINE_integer(
     'save_interval_secs', 600,
     'The frequency with which the model is saved, in seconds.')
 tf.app.flags.DEFINE_float(
-    'gpu_memory_fraction', 0.8, 'GPU memory fraction to use.')
+    'gpu_memory_fraction', 0.5, 'GPU memory fraction to use.')
 
 # =========================================================================== #
 # Optimization Flags.
@@ -110,9 +110,9 @@ tf.app.flags.DEFINE_string(
     'exponential',
     'Specifies how the learning rate is decayed. One of "fixed", "exponential",'
     ' or "polynomial"')
-tf.app.flags.DEFINE_float('learning_rate', 0.01, 'Initial learning rate.')
+tf.app.flags.DEFINE_float('learning_rate', 0.001, 'Initial learning rate.')
 tf.app.flags.DEFINE_float(
-    'end_learning_rate', 0.0001,
+    'end_learning_rate', 0.00010,
     'The minimal end learning rate used by a polynomial decay learning rate.')
 tf.app.flags.DEFINE_float(
     'label_smoothing', 0.0, 'The amount of label smoothing.')
@@ -175,6 +175,10 @@ tf.app.flags.DEFINE_boolean(
     'ignore_missing_vars', False,
     'When restoring a checkpoint would ignore missing variables.')
 
+tf.app.flags.DEFINE_integer(
+    'decay_steps', 0, 'decay step')
+
+
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -185,6 +189,7 @@ def main(_):
     if not FLAGS.dataset_dir:
         raise ValueError('You must supply the dataset directory with --dataset_dir')
 
+    print("decay_rate", FLAGS.learning_rate_decay_factor)
     tf.logging.set_verbosity(tf.logging.DEBUG)
     with tf.Graph().as_default():
         # Config model_deploy. Keep TF Slim Models structure.
@@ -328,6 +333,7 @@ def main(_):
             learning_rate = tf_utils.configure_learning_rate(FLAGS,
                                                              dataset.num_samples,
                                                              global_step)
+            print("learning_rate: ~~~", learning_rate)
             optimizer = tf_utils.configure_optimizer(FLAGS, learning_rate)
             summaries.add(tf.summary.scalar('learning_rate', learning_rate))
 

@@ -1,53 +1,3 @@
-# Copyright 2016 Paul Balanca. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Definition of 300 VGG-based SSD network.
-
-This model was initially introduced in:
-SSD: Single Shot MultiBox Detector
-Wei Liu, Dragomir Anguelov, Dumitru Erhan, Christian Szegedy, Scott Reed,
-Cheng-Yang Fu, Alexander C. Berg
-https://arxiv.org/abs/1512.02325
-
-Two variants of the model are defined: the 300x300 and 512x512 models, the
-latter obtaining a slightly better accuracy on Pascal VOC.
-
-Usage:
-    with slim.arg_scope(ssd_vgg.ssd_vgg()):
-        outputs, end_points = ssd_vgg.ssd_vgg(inputs)
-
-This network port of the original Caffe model. The padding in TF and Caffe
-is slightly different, and can lead to severe accuracy drop if not taken care
-in a correct way!
-
-In Caffe, the output size of convolution and pooling layers are computing as
-following: h_o = (h_i + 2 * pad_h - kernel_h) / stride_h + 1
-
-Nevertheless, there is a subtle difference between both for stride > 1. In
-the case of convolution:
-    top_size = floor((bottom_size + 2*pad - kernel_size) / stride) + 1
-whereas for pooling:
-    top_size = ceil((bottom_size + 2*pad - kernel_size) / stride) + 1
-Hence implicitely allowing some additional padding even if pad = 0. This
-behaviour explains why pooling with stride and kernel of size 2 are behaving
-the same way in TensorFlow and Caffe.
-
-Nevertheless, this is not the case anymore for other kernel sizes, hence
-motivating the use of special padding layer for controlling these side-effects.
-
-@@ssd_vgg_300
-"""
 import math
 from collections import namedtuple
 
@@ -57,6 +7,7 @@ import tensorflow as tf
 import tf_extended as tfe
 from nets import custom_layers
 from nets import ssd_common
+from ops import conv2d_block, res_block, separable_conv 
 
 slim = tf.contrib.slim
 
@@ -79,15 +30,20 @@ SSDParams = namedtuple('SSDParameters', ['img_shape',
                                          ])
 
 
+def gen_anchor_sizes(min_ratia, max_ratio, anchor_nums=6, size=300):
+    cal_scale = lambda (k): min_ratia + (max_ratio -  min_ratia) / (anchor_nums - 1) * (k - 1)
+    return [(cal_scale(k) * size, cal_scale(k+1) * size) for k in xrange(1, anchor_nums + 1)]
+
+
 class SSDNet(object):
     """Implementation of the SSD VGG-based 300 network.
 
     The default features layers with 300x300 image input are:
       conv4 ==> 38 x 38
-      conv7 ==> 19 x 19
-      conv8 ==> 10 x 10
-      conv9 ==> 5 x 5
-      conv10 ==> 3 x 3
+      conv6 ==> 19 x 19
+      conv7 ==> 10 x 10
+      conv8 ==> 5 x 5
+      conv9 ==> 3 x 3
       conv11 ==> 1 x 1
     The default image size used to train this network is 300x300.
     """
@@ -95,9 +51,10 @@ class SSDNet(object):
         img_shape=(300, 300),
         num_classes=21,
         no_annotation_label=21,
-        feat_layers=['block4', 'block7', 'block8', 'block9', 'block10', 'block11'],
-        feat_shapes=[(38, 38), (19, 19), (10, 10), (5, 5), (3, 3), (1, 1)],
+        feat_layers=['res7_1_expand', 'block7', 'block8', 'block9', "block10", 'block11'],
+        feat_shapes=[(19, 19), (10, 10), (5, 5), (3, 3), (2, 2), (1, 1)],
         anchor_size_bounds=[0.15, 0.90],
+        #anchor_sizes = gen_anchor_sizes(*([0.15, 0.90] + [6] + [300])),
         # anchor_size_bounds=[0.20, 0.90],
         anchor_sizes=[(21., 45.),
                       (45., 99.),
@@ -105,19 +62,27 @@ class SSDNet(object):
                       (153., 207.),
                       (207., 261.),
                       (261., 315.)],
+
         # anchor_sizes=[(30., 60.),
         #               (60., 111.),
         #               (111., 162.),
         #               (162., 213.),
         #               (213., 264.),
         #               (264., 315.)],
-        anchor_ratios=[[2, .5],
+        anchor_ratios=[[2, .5, 3, 1./3],
                        [2, .5, 3, 1./3],
                        [2, .5, 3, 1./3],
                        [2, .5, 3, 1./3],
-                       [2, .5],
-                       [2, .5]],
-        anchor_steps=[8, 16, 32, 64, 100, 300],
+                       [2, .5, 3, 1./3],
+                       [2, .5, 3, 1./3]],
+
+        #anchor_ratios=[[2, .5, 3, 1./3],
+        #               [2, .5, 3, 1./3],
+        #               [2, .5, 3, 1./3],
+        #               [2, .5, 3, 1./3],
+        #               [2, .5, 3, 1./3],
+        #               [2, .5, 3, 1./3]],
+        anchor_steps=[16, 30, 60, 100, 150, 300],
         anchor_offset=0.5,
         normalizations=[20, -1, -1, -1, -1, -1],
         prior_scaling=[0.1, 0.1, 0.2, 0.2]
@@ -131,6 +96,7 @@ class SSDNet(object):
             self.params = params
         else:
             self.params = SSDNet.default_params
+       
 
     # ======================================================================= #
     def net(self, inputs,
@@ -260,7 +226,6 @@ def ssd_size_bounds_to_values(size_bounds,
 
     This function follows the computation performed in the original
     implementation of SSD in Caffe.
-    but in papers: min + (max - min)/(n_layer - 1) * k, a little diffrence
 
     Return:
       list of list containing the absolute sizes at each scale. For each scale,
@@ -448,64 +413,75 @@ def ssd_net(inputs,
 
     # End_points collect relevant activations for external use.
     end_points = {}
-    with tf.variable_scope(scope, 'ssd_300_vgg', [inputs], reuse=reuse):
-        # Original VGG-16 blocks.
-        net = slim.repeat(inputs, 2, slim.conv2d, 64, [3, 3], scope='conv1')
+    exp = 6  # expansion ratio
+    w_d = 0.0
+
+    with tf.variable_scope('mobilenetv2'):
+        # Block 1.
+        net = conv2d_block(inputs, 32, 3, 2, is_training, name='conv1_1')  # size/2, 256
         end_points['block1'] = net
-        net = slim.max_pool2d(net, [2, 2], scope='pool1')
+
         # Block 2.
-        net = slim.repeat(net, 2, slim.conv2d, 128, [3, 3], scope='conv2')
+        net = res_block(net, 1, 16, 1, is_training, name='res2_1')
         end_points['block2'] = net
-        net = slim.max_pool2d(net, [2, 2], scope='pool2')
+
         # Block 3.
-        net = slim.repeat(net, 3, slim.conv2d, 256, [3, 3], scope='conv3')
+        net = res_block(net, exp, 24, 2, is_training, name='res3_1')  # size/4, 128
+        net = res_block(net, exp, 24, 1, is_training, name='res3_2')
         end_points['block3'] = net
-        net = slim.max_pool2d(net, [2, 2], scope='pool3')
+
         # Block 4.
-        net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv4')
+        net = res_block(net, exp, 32, 2, is_training, name='res4_1')  # size/8, 64
+        net = res_block(net, exp, 32, 1, is_training, name='res4_2')
+        net = res_block(net, exp, 32, 1, is_training, name='res4_3')
         end_points['block4'] = net
-        net = slim.max_pool2d(net, [2, 2], scope='pool4')
+
         # Block 5.
-        net = slim.repeat(net, 3, slim.conv2d, 512, [3, 3], scope='conv5')
+        net = res_block(net, exp, 64, 1, is_training, name='res5_1')
+        net = res_block(net, exp, 64, 1, is_training, name='res5_2')
+        net = res_block(net, exp, 64, 1, is_training, name='res5_3')
+        net = res_block(net, exp, 64, 1, is_training, name='res5_4')
         end_points['block5'] = net
-        net = slim.max_pool2d(net, [3, 3], stride=1, scope='pool5')
 
-        # Additional SSD blocks.
-        # Block 6: let's dilate the hell out of it!
-        net = slim.conv2d(net, 1024, [3, 3], rate=6, scope='conv6')
+        # Block 6.
+        net = res_block(net, exp, 96, 2, is_training, name='res6_1')  # size/16, 32
+        net = res_block(net, exp, 96, 1, is_training, name='res6_2')
+        net = res_block(net, exp, 96, 1, is_training, name='res6_3')
         end_points['block6'] = net
-        net = tf.layers.dropout(net, rate=dropout_keep_prob, training=is_training)
-        # Block 7: 1x1 conv. Because the fuck.
-        net = slim.conv2d(net, 1024, [1, 1], scope='conv7')
-        end_points['block7'] = net
-        net = tf.layers.dropout(net, rate=dropout_keep_prob, training=is_training)
 
-        # Block 8/9/10/11: 1x1 and 3x3 convolutions stride 2 (except lasts).
+        # Block 7. expand6 fisrt, be careful res7-1
+        net = res_block(net, exp, 160, 2, is_training, name='res7_1', end_points=end_points)  # size/32, 16
+        net = res_block(net, exp, 160, 1, is_training, name='res7_2')
+        net = res_block(net, exp, 160, 1, is_training, name='res7_3')
+
+        net = res_block(net, exp, 320, 1, is_training, name='res7_4_add')
+
+        net = conv2d_block(net, 1280, 1, 1, is_training, name="conv7_5_add")        
+        end_points["block7"] = net
+
         end_point = 'block8'
         with tf.variable_scope(end_point):
-            net = slim.conv2d(net, 256, [1, 1], scope='conv1x1')
-            net = custom_layers.pad2d(net, pad=(1, 1))
-            net = slim.conv2d(net, 512, [3, 3], stride=2, scope='conv3x3', padding='VALID')
+            net = conv2d_block(net, 256, 1, 1, is_training, name="conv8_1m1")
+            net = separable_conv(net, 3, 512, 2, name='sep8_1', pad='SAME')  # size/64, 8
         end_points[end_point] = net
         end_point = 'block9'
         with tf.variable_scope(end_point):
-            net = slim.conv2d(net, 128, [1, 1], scope='conv1x1')
-            net = custom_layers.pad2d(net, pad=(1, 1))
-            net = slim.conv2d(net, 256, [3, 3], stride=2, scope='conv3x3', padding='VALID')
+            net = conv2d_block(net, 128, 1, 1, is_training, name="conv9_1m1")
+            net = separable_conv(net, 3, 256, 2, name='sep9_1', pad='SAME')  # size/128, 4
         end_points[end_point] = net
         end_point = 'block10'
         with tf.variable_scope(end_point):
-            net = slim.conv2d(net, 128, [1, 1], scope='conv1x1')
-            net = slim.conv2d(net, 256, [3, 3], scope='conv3x3', padding='VALID')
+            net = conv2d_block(net, 128, 1, 1, is_training, name="conv10_1m1")
+            net = separable_conv(net, 3, 256, 2, name='sep10_1', pad='SAME')  # size/256, 2
         end_points[end_point] = net
         end_point = 'block11'
         with tf.variable_scope(end_point):
-            net = slim.conv2d(net, 128, [1, 1], scope='conv1x1')
-            net = slim.conv2d(net, 256, [3, 3], scope='conv3x3', padding='VALID')
+            net = conv2d_block(net, 64, 1, 1, is_training, name="conv11_1m1")
+            net = separable_conv(net, 3, 128, 2, name='sep11_1', pad='SAME')  # size/512, 1
         end_points[end_point] = net
 
-        for  i, layers in enumerate(feat_layers):
-             print(end_points[layers].get_shape())
+        for x, ele in end_points.iteritems():
+            print("!!!shapes:", x, ele.shape)
 
         # Prediction and localisations layers.
         predictions = []
@@ -591,6 +567,8 @@ def ssd_losses(logits, localisations,
         lshape = tfe.get_shape(logits[0], 5)
         num_classes = lshape[-1]
         batch_size = lshape[0]
+        for x in logits:
+            print("/logits", x.shape)
 
         # Flatten out all vectors!
         flogits = []
@@ -623,6 +601,7 @@ def ssd_losses(logits, localisations,
         nmask = tf.logical_and(tf.logical_not(pmask),
                                gscores > -0.5)
         fnmask = tf.cast(nmask, dtype)
+        print(nmask.shape, predictions.shape, (1. - fnmask).shape)
         nvalues = tf.where(nmask,
                            predictions[:, 0],
                            1. - fnmask)
