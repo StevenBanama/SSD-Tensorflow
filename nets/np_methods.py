@@ -66,6 +66,7 @@ def ssd_bboxes_select_layer(predictions_layer,
       classes, scores, bboxes: Numpy arrays...
     """
     # First decode localizations features if necessary.
+    print(predictions_layer.shape, localizations_layer.shape)
     if decode:
         localizations_layer = ssd_bboxes_decode(localizations_layer, anchors_layer)
 

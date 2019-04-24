@@ -29,6 +29,9 @@ from nets import ssd_vgg_300
 from nets import ssd_vgg_512
 from nets import mobilenet_v2 
 from nets import mobilenet_v2_coco
+from nets import mobilenet_v2_pascal
+from nets import mobilenet_v2_224
+from nets import mobilenet_v2_160
 
 slim = tf.contrib.slim
 
@@ -41,6 +44,9 @@ networks_map = {'vgg_a': vgg.vgg_a,
                 'ssd_512_vgg_caffe': ssd_vgg_512.ssd_net,
                 "mobile_v2": mobilenet_v2.ssd_net, 
                 "mobile_v2_coco": mobilenet_v2_coco.ssd_net,
+                "mobile_v2_pascal": mobilenet_v2_pascal.ssd_net,
+                "mobile_v2_224": mobilenet_v2_224.ssd_net,
+                "mobile_v2_160": mobilenet_v2_160.ssd_net,
                 }
 
 arg_scopes_map = {'vgg_a': vgg.vgg_arg_scope,
@@ -51,12 +57,18 @@ arg_scopes_map = {'vgg_a': vgg.vgg_arg_scope,
                   'ssd_512_vgg': ssd_vgg_512.ssd_arg_scope,
                   'ssd_512_vgg_caffe': ssd_vgg_512.ssd_arg_scope_caffe,
                   'mobile_v2': ssd_vgg_300.ssd_arg_scope,
+                  "mobile_v2_pascal": ssd_vgg_300.ssd_arg_scope,
+                  "mobile_v2_224": ssd_vgg_300.ssd_arg_scope,  # 224
+                  "mobile_v2_160": ssd_vgg_300.ssd_arg_scope,  # 224
                   }
 
 networks_obj = {'ssd_300_vgg': ssd_vgg_300.SSDNet,
                 'ssd_512_vgg': ssd_vgg_512.SSDNet,
                 "mobile_v2": mobilenet_v2.SSDNet,
                 "mobile_v2_coco": mobilenet_v2_coco.SSDNet,
+                "mobile_v2_pascal": mobilenet_v2_pascal.SSDNet,
+                "mobile_v2_224": mobilenet_v2_224.SSDNet,
+                "mobile_v2_160": mobilenet_v2_160.SSDNet,
                 }
 
 
