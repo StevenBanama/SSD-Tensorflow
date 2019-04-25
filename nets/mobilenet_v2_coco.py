@@ -31,7 +31,7 @@ SSDParams = namedtuple('SSDParameters', ['img_shape',
 
 
 def gen_anchor_sizes(min_ratia, max_ratio, anchor_nums=6, size=300):
-    cal_scale = lambda (k): min_ratia + (max_ratio -  min_ratia) / (anchor_nums - 1) * (k - 1)
+    cal_scale = lambda k: min_ratia + (max_ratio -  min_ratia) / (anchor_nums - 1) * (k - 1)
     return [(cal_scale(k) * size, cal_scale(k+1) * size) for k in xrange(1, anchor_nums + 1)]
 
 

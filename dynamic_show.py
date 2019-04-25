@@ -1,15 +1,14 @@
 #coding=utf-8
 import cv2
 import numpy as np
-from PIL import Image, ImageSequence
-from test2 import GestureDetector
+from test3 import GestureDetector
 FRAMES = {}
 GIF = {"FIVE": "./gifs/gfive2.gif", "SIX": "./gifs/g666.gif", "IOU": "./gifs/glove.gif", "BAD": "./gifs/gbad.gif", "V": "./gifs/gvictory.gif", "OK": "./gifs/gok.gif", "GOOD": "./gifs/gok2.gif"}
 GFS = {}
 
 def process_gifs():
     global GFS
-    for key, path in GIF.iteritems():
+    for key, path in GIF.items():
         cap = cv2.VideoCapture(path)
         status, frame = cap.read()
         GFS[key] = []
@@ -80,19 +79,26 @@ def process_image(img, points):
 def show_video():
     cap = cv2.VideoCapture(0)
     gt = GestureDetector()
-    run_func = gt.reload_pb("gesture_160_v0306.pb")
+    gt.reload_pb("gesture_160_v0306.pb")
     index = 0
     points = []
+    import time
     while True:
         ret, cv_img = cap.read()
         index += 1
-        points = run_func(cv_img)
+        print("frame start")
+        points = gt.run(cv_img)
+        print("inference end")
         cv_img = process_image(cv_img, points)
+        time.sleep(0.5)
         if cv2.waitKey(3) == 27:
             break
-        cv2.imshow("result", cv_img)
+        #cv2.imshow("result", cv_img)
+        print("frame end")
     cap.release()
 
 if __name__ == "__main__":
+    #import os
+    #os.environ["CUDA_VISIBLE_DEVICES"]="-1" 
     process_gifs()
     show_video()

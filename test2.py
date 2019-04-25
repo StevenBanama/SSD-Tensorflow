@@ -87,8 +87,9 @@ def test(img_dir, save=False):
 
 class GestureDetector:
 
-    def __init__(self):
-        self.tensors = sess, rscores, boxes, bbox_img, img_input, ssd_anchors = init_net()
+    def __init__(self, is_train=False):
+        if is_train:
+            self.tensors = sess, rscores, boxes, bbox_img, img_input, ssd_anchors = init_net()
 
     def run(self, cv_img):
         rclasses, rbboxes = once_eval(*(self.tensors + (cv_img,)))
